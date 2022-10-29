@@ -1,91 +1,148 @@
+<!-- Ce Site est une démo des possibilitées d'utilisation de la librairie Numworks.js compatible toute version N0100/N0110, 
+nous utiliserons ici une copie mise à jour https://github.com/UpsilonNumworks/upsilon.js 
+l'objectif de cette démo est de mettre en avant les possibilitées d'intégration des différents éléments pour envoyer son script -->
+
+<!-- On importe le script JS Principal trouvable sur le git ci-dessus -->
 <script src="numworks.js"></script>
 
 
 
+<!-- On créer un bouton qui sera utilisé pour déclencher le processus de connexion dans le script avec le id "connect" -->
 <button id="connect">Connecter Numworks</button>
+
+<!-- On créer un containeur div qui accueillera la statut de connexion renvoyé par le script, il est identifié par le id "status" -->
 <div id="status"></div>
+
+<!-- On créer un containeur div qui accueillera différentes infos mais il n'est pas forcément utilisé ici, il est identifié par le id "content" -->
 <div id="content">
             Please connect your Numworks.
  </div>
-<!--add url input and associated validation button-->
 
- <!--add file input-->
+
+
+ <!--On ajoute ici une entrée de fichier n'acceptant que les fichier portant l'extension python ".py" -->
 <input type="file" id="file" name="file" accept=".py" /><br>
- <!-- add a multiline textbox -->
+
+<!-- une entrée "titre" est ajoutée avec un label l'identifiant, son id est "titre" -->
+<label for="titre">Titre</label>
+<input type="text" id="titre" name="titre" /><br>
+
+ <!-- On insère une entrée texte multiligne afin d'accueilir le script qui sera envoyé, 
+ on y importera le contenu du fichier si importé afin de permettre l'édition de celui ci avant envoi.
+ Identifié par l'id "code" -->
 <textarea id="code" rows="10" cols="50"></textarea>
+
+<!-- Le bouton permettra le déclenchement de l'envoi à la calculatrice, celui ci sera mis en écoute par le script par l'id "send" -->
 <br><button id="send">Envoyer</button>
 
-
+<!-- Cette partie est notre partie JS qui permettra la passerelle entre notre script dynamique et notre contenu statique HTML -->
 <script>
+
+// On créer une variable qui accueillera l'objet de communication avec notre calculatrice, c'est le coeur du script 
 var calculator = new Numworks();
 
+//différentes variables sont crées pour accueillir les éléments HTML qui seront utilisés et les identifier en JS 
 var script = document.getElementById("code");
-
 var status = document.getElementById("status");
 var connect = document.getElementById("connect");
 var content = document.getElementById("content");
+var titre = document.getElementById("titre");
 var send = document.getElementById("send");
 var file = document.getElementById("file");
 
+//cette fonction utilise les fonctionnalitées USB de WebUSB afin de détecter une déconnexion de la calculatrice et agir en conséquence
 navigator.usb.addEventListener("disconnect", function(e) {
   calculator.onUnexpectedDisconnect(e, function() {
-    status.innerHTML = "Disconnected.";
-    content.innerHTML = "Please connect your Numworks.";
+	//l'attribut innerHtml de nos objets permet de remplacer le contenu HTML de nos éléments :)
+    status.innerHTML = "Déconnecté";
+    content.innerHTML = "Connectez votre Numworks.";
+    //on lance la recherche d'une calculatrice
     calculator.autoConnect(autoConnectHandler);
   });
 });
 
-//on file change, get text content and put it in the textarea
+//Lors de l'import d'un fichier, on importe son contenu dans un 'reader' qui nous permettra de récupérer le contenu du fichier et l'afficher dans le champ de texte.
 file.addEventListener("change", function(e) {
   var file = e.target.files[0];
+  //on récupère le titre du fichier qu'on met dans notre champ titre sans l'extension
+  titre.value = file.name.replace(".py", "");
   var reader = new FileReader();
   reader.onload = function(e) {
+	//la valeur de notre champ de texte est remplacé par le texte contenu dans le fichier.
 	script.value = e.target.result;
   };
   reader.readAsText(file);
 });
-//on send click, trigger handleScriptSend
+
+//Lors de l'appui sur le bouton "Envoyer", on appelle notre fonction d'envoi de script "handleScriptSend", cette commande met "sous écoute" le bouton
 send.addEventListener("click", handleScriptSend);
 
+
 function handleScriptSend() {
+	//on récupère le contenu de notre champ de texte et on le stocke dans une variable
+    //on le fait pour le code et le titre
     var code = script.value;
-    connected(code, "mkdocs", 1);
+	var title = titre.value;
+	
+	//Nos variables sont renvoyés à une fonction
+    // pour répondre à des bizarreries, nous avons ajouté un attribut "send" booléan (le troisème) qui permet de savoir si le script est envoyé ou non
+    connected(code, title, 1);
 }
 
+//fonction en charge d'assurer l'auto connexion
 calculator.autoConnect(autoConnectHandler);
 
+//cette fonction arrête la recherche d'une calculatrice et se connecte à la calculatrice.
 function autoConnectHandler(e) {
   calculator.stopAutoConnect();
   connected("", "", 0);      
 }
 
+//cette fonction gère l'appui sur le bouton de connexion
 connect.onclick = function(e) {
+    //on lance le popup de selection de l'appareil
   calculator.detect(function() {
+      //on arrête la recherche et on se connecte
     calculator.stopAutoConnect();
     connected("","",0);
   }, function(error) {
+	//autrement on affiche l'erreur dans notre containeur status
     status.innerHTML = "Error: " + error;
   });
 };
 
+//cette fonction "hybride" gère la connexion et l'envoi des scripts avec 3 arguments, (le script, son titre, et l'envoi ou non pour permettre une connexion)
 async function connected(script, name, send) {
+  //on désactive le bouton de connexion
   connect.disabled = true;
+  // on affiche le statut de connexion comme connecté 
   status.innerHTML = "Connected.";
 
+  //on récupère le modèle (ça ne marchera probablement pas avec une valeur ???)
   var model = calculator.getModel(false);
 
+  //on affiche le modèle dans le containeur content
   var html_content = "Model: " + calculator.getModel(false) + "<br/>";
 
-  // Get the platform information
+  //On récupère les infos de la calculatrice pour que le script sache la méthode a utilisé pour l'envoi
   var platformInfo = await calculator.getPlatformInfo();
   console.log(platformInfo);
+
+  //on veux envoyer un script
   if(send) {
+  //le "storage" partie de la RAM contenant les script est récupérée sur le PC
   var storage = await calculator.backupStorage();
+    // on injecte notre script dans le storage
 	storage.records.push({"name": name, "type": "py", "autoImport": true, position: 0, "code": script});
+    //et on installe ce storage à son emplacement original mais modifié !
 	await calculator.installStorage(storage, function() {
-    console.log("don")
+	//c'est fait !'
+    console.log("done")
 	});
   }
   content.innerHTML = html_content;
 }
 </script>
+
+<!-- L'applicatif de ce script repose sur le fait de pouvoir récupérer la valeur du contenu souhaité afin de l'envoyer à notre script,
+La console de développement F12 est très utile pour chercher les bons arguments à utiliser dans la "console", Bon courage ! -->
